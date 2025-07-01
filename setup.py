@@ -4,8 +4,8 @@ from datetime import datetime
 from colorama import *
 import asyncio, json, os, pytz
 
-# Impor klien API Anti-Captcha (Anda perlu menginstal ini: pip install anticaptchaofficial)
-from anticaptchaofficial.turnstile import * # Menggunakan turnstile karena SITE_KEY yang diberikan
+# Impor klien API Anti-Captcha untuk Cloudflare Turnstile
+from anticaptchaofficial.turnstileproxyless import *
 
 wib = pytz.timezone('Asia/Jakarta')
 
@@ -22,15 +22,16 @@ class DDAI:
             "User-Agent": FakeUserAgent().random
         }
         self.BASE_API = "https://auth.ddai.space"
-        self.PAGE_URL = "https://app.ddai.space"
-        # SITE_KEY Anda (0x4AAAAAABdw7Ezbqw4v6Kr1) menunjukkan ini adalah Cloudflare Turnstile, bukan reCAPTCHA.
-        self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1" 
+        self.PAGE_URL = "https://app.ddai.space" # URL halaman tempat Turnstile muncul
+        self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1" # Kunci situs Cloudflare Turnstile Anda
         self.ANTICAPTCHA_API_KEY = self.load_anticaptcha_key() # Muat kunci API Anti-Captcha
-        # self.CAPTCHA_KEY = None # Tidak lagi diperlukan karena Anti-Captcha
-        # Atribut proxy tidak lagi diperlukan karena Anti-Captcha menanganinya
+
+        # Hapus semua atribut terkait proxy manual
         # self.proxies = []
         # self.proxy_index = 0
         # self.account_proxies = {}
+        # self.CAPTCHA_KEY = None # Tidak lagi diperlukan karena Anti-Captcha
+
         self.captcha_tokens = {}
         self.password = {}
 
@@ -62,7 +63,6 @@ class DDAI:
         )
 
     def welcome(self):
-        # Tolak untuk menghapus watermark
         print(
             f"""
         {Fore.GREEN + Style.BRIGHT}Auto Setup {Fore.BLUE + Style.BRIGHT}DDAI Network - BOT
@@ -114,16 +114,11 @@ class DDAI:
         except Exception as e:
             return []
             
-    # Metode load_2captcha_key tidak lagi diperlukan
+    # Hapus metode load_2captcha_key
     # def load_2captcha_key(self):
-    #     try:
-    #         with open("2captcha_key.txt", 'r') as file:
-    #             captcha_key = file.read().strip()
-    #         return captcha_key
-    #     except Exception as e:
-    #         return None
+    #     ...
 
-    # Metode terkait proxy dihapus
+    # Hapus semua metode terkait proxy manual
     # async def load_proxies(self, use_proxy_choice: int):
     #     ...
     # def check_proxy_schemes(self, proxies):
@@ -159,22 +154,15 @@ class DDAI:
             self.log(f"{Fore.RED}Kunci API Anti-Captcha tidak dimuat. Tidak dapat menyelesaikan captcha.{Style.RESET_ALL}")
             return None
 
-        solver = CloudflareTurnstile() # Menggunakan CloudflareTurnstile
-        solver.set_verbose(0)
+        solver = turnstileProxyless() # Menggunakan turnstileProxyless
+        solver.set_verbose(0) # Atur ke 0 untuk output yang lebih bersih
         solver.set_key(self.ANTICAPTCHA_API_KEY)
         
         solver.set_website_url(self.PAGE_URL)
         solver.set_website_key(self.SITE_KEY)
+        solver.set_soft_id(0) # Opsional: set softId jika Anda memilikinya
 
         self.log(f"{Fore.YELLOW}Memulai penyelesaian Cloudflare Turnstile dengan Anti-Captcha...{Style.RESET_ALL}")
-        
-        # Penanganan proxy di sini dilakukan oleh pustaka Anti-Captcha secara internal
-        # Jika Anda ingin menggunakan proxy kustom, Anda akan mengaturnya di sini
-        # Contoh: solver.set_proxy_address("your_proxy_address")
-        # solver.set_proxy_port(port)
-        # solver.set_proxy_login(username)
-        # solver.set_proxy_password(password)
-        # solver.set_proxy_type("http") # atau "https", "socks4", "socks5"
         
         g_response = solver.solve_and_get_solution()
 
@@ -213,10 +201,7 @@ class DDAI:
         return None
         
     async def process_accounts(self, email: str): # Parameter use_proxy dihapus
-        # Baris ini tidak lagi diperlukan karena proxy ditangani oleh Anti-Captcha
-        # proxy = self.get_next_proxy_for_account(email) if use_proxy else None
-        
-        # Anda dapat menghapus baris log proxy ini atau mengubahnya untuk mencerminkan bahwa proxy ditangani oleh Anti-Captcha
+        # Proxy ditangani oleh Anti-Captcha, tidak ada logika proxy manual di sini
         self.log(
             f"{Fore.CYAN + Style.BRIGHT}Proxy  :{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} Ditangani oleh Anti-Captcha {Style.RESET_ALL}" # Mengubah pesan
@@ -326,5 +311,5 @@ if __name__ == "__main__":
         print(
             f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-            f"{Fore.RED + Style.BRIGHT}[ EXIT ] DDAI Network - BOT{Style.RESET_ALL}                                      ",
+            f"{Fore.RED + Style.BRIGHT}[ KELUAR ] DDAI Network - BOT{Style.RESET_ALL}                                      ",
         )
