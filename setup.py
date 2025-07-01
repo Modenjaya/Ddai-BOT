@@ -164,7 +164,7 @@ class DDAI:
 
         self.log(f"{Fore.YELLOW}Memulai penyelesaian Cloudflare Turnstile dengan Anti-Captcha...{Style.RESET_ALL}")
         
-        g_response = solver.solve_and_get_solution()
+        g_response = solver.solve_and_return_solution()
 
         if g_response != 0:
             self.log(f"{Fore.GREEN}Cloudflare Turnstile terpecahkan: {g_response}{Style.RESET_ALL}")
