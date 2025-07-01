@@ -1,11 +1,11 @@
-from curl_cffi import requests as cffi_requests # Beri alias untuk requests dari curl_cffi
+from curl_cffi import requests as cffi_requests
+from curl_cffi.requests.errors import RequestsError
 from fake_useragent import FakeUserAgent
 from datetime import datetime
 from colorama import *
 import asyncio, json, os, pytz
-import random # Tambahkan impor modul random
+import random
 
-# Impor klien API Anti-Captcha untuk Cloudflare Turnstile
 from anticaptchaofficial.turnstileproxyless import *
 
 wib = pytz.timezone('Asia/Jakarta')
@@ -23,15 +23,14 @@ class DDAI:
             "User-Agent": FakeUserAgent().random
         }
         self.BASE_API = "https://auth.ddai.space"
-        self.PAGE_URL = "https://app.ddai.space" # URL halaman tempat Turnstile muncul
-        self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1" # Kunci situs Cloudflare Turnstile Anda
-        self.ANTICAPTCHA_API_KEY = self.load_anticaptcha_key() # Muat kunci API Anti-Captcha
+        self.PAGE_URL = "https://app.ddai.space"
+        self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1"
+        self.ANTICAPTCHA_API_KEY = self.load_anticaptcha_key()
 
         self.captcha_tokens = {}
         self.password = {}
 
     def load_anticaptcha_key(self):
-        """Memuat kunci API Anti-Captcha dari sebuah file."""
         filename = "anticaptcha_key.txt"
         try:
             if not os.path.exists(filename):
@@ -156,41 +155,52 @@ class DDAI:
 
     async def auth_login(self, email: str, retries=5):
         url = f"{self.BASE_API}/login"
-        data = json.dumps({"email":email, "password":self.password[email], "captchaToken":self.captcha_tokens[email]})
-        headers = {
-            **self.headers,
-            "Content-Length": str(len(data)),
-            "Content-Type": "application/json"
-        }
+        
         for attempt in range(retries):
+            current_headers = self.headers.copy()
+            current_headers["User-Agent"] = FakeUserAgent().random
+            
+            data = json.dumps({"email":email, "password":self.password[email], "captchaToken":self.captcha_tokens[email]})
+            current_headers["Content-Length"] = str(len(data))
+            current_headers["Content-Type"] = "application/json"
+
+            # Inisialisasi retry_after di awal loop percobaan
+            retry_after = 0 
+
             try:
-                response = await asyncio.to_thread(cffi_requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False)
+                self.log(f"{Fore.YELLOW}Percobaan login {attempt + 1}/{retries} untuk {self.mask_account(email)} dengan UA baru...{Style.RESET_ALL}")
+                response = await asyncio.to_thread(cffi_requests.post, url=url, headers=current_headers, data=data, timeout=60, impersonate="chrome110", verify=False)
                 response.raise_for_status()
                 return response.json()
-            except cffi_requests.HTTPError as e: # Tangkap HTTPError secara spesifik untuk menangani 429
-                if e.response.status_code == 429:
-                    retry_after = int(e.response.headers.get('Retry-After', 60)) # Dapatkan waktu tunggu dari header, default 60 detik
-                    self.log(
-                        f"{Fore.RED+Style.BRIGHT}Status :{Style.RESET_ALL}"
-                        f"{Fore.RED+Style.BRIGHT} Login Gagal - HTTP Error 429: Terlalu Banyak Permintaan. Menunggu {retry_after} detik.{Style.RESET_ALL}"
-                    )
-                    await asyncio.sleep(retry_after + 5) # Tambahkan sedikit buffer, lalu coba lagi akun yang sama
+            except RequestsError as e:
+                error_message = "Unknown RequestsError" 
+                
+                if e.response:
+                    error_message = f"HTTP Error {e.response.status_code}: {e.response.text.strip() if e.response.text else e.response.reason}"
+                    if e.response.status_code == 429:
+                        retry_after = int(e.response.headers.get('Retry-After', 10))
+                        error_message = f"HTTP Error 429: Terlalu Banyak Permintaan. Menunggu {retry_after} detik."
+                else:
+                    error_message = f"Koneksi/Timeout Error: {str(e)}"
+                
+                self.log(f"{Fore.RED+Style.BRIGHT}Status :{Style.RESET_ALL}"
+                         f"{Fore.RED+Style.BRIGHT} Login Gagal - {error_message}{Style.RESET_ALL}")
+
+                if attempt < retries - 1:
+                    wait_time = retry_after + 5 if '429' in error_message else 5
+                    self.log(f"{Fore.YELLOW}Menunggu {wait_time} detik sebelum retry...{Style.RESET_ALL}")
+                    await asyncio.sleep(wait_time)
                     continue
                 else:
-                    self.log(
-                        f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
-                        f"{Fore.RED+Style.BRIGHT} Login Gagal - HTTP Error {e.response.status_code}: {e}{Style.RESET_ALL}"
-                    )
+                    self.log(f"{Fore.RED}Gagal login untuk {self.mask_account(email)} setelah {retries} percobaan.{Style.RESET_ALL}")
             except Exception as e:
-                self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Login Gagal: {Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
-                )
-            
-            if attempt < retries - 1:
-                await asyncio.sleep(5)
-                continue
+                self.log(f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
+                         f"{Fore.RED+Style.BRIGHT} Login Gagal: {Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}")
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+                else:
+                    self.log(f"{Fore.RED}Gagal login untuk {self.mask_account(email)} setelah {retries} percobaan.{Style.RESET_ALL}")
             
         return None
         
@@ -228,6 +238,11 @@ class DDAI:
                 f"{Fore.CYAN + Style.BRIGHT}Status :{Style.RESET_ALL}"
                 f"{Fore.GREEN + Style.BRIGHT} Token Berhasil Disimpan {Style.RESET_ALL}"
             )
+        else:
+            self.log(
+                f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
+                f"{Fore.RED+Style.BRIGHT} Login Gagal Total untuk akun {self.mask_account(email)}. Token tidak disimpan.{Style.RESET_ALL}"
+            )
         
     async def main(self):
         try:
@@ -251,37 +266,38 @@ class DDAI:
 
             separator = "="*25
             for idx, account in enumerate(accounts, start=1):
-                if account:
-                    email = account["Email"]
-                    password = account["Password"]
+                self.log(
+                    f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} {idx} {Style.RESET_ALL}"
+                    f"{Fore.CYAN + Style.BRIGHT}Dari{Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} {len(accounts)} {Style.RESET_ALL}"
+                    f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
+                )
+
+                email = account.get("Email")
+                password = account.get("Password")
+
+                if not email or not isinstance(email, str) or "@" not in email or not password or not isinstance(password, str):
                     self.log(
-                        f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
-                        f"{Fore.WHITE + Style.BRIGHT} {idx} {Style.RESET_ALL}"
-                        f"{Fore.CYAN + Style.BRIGHT}Dari{Style.RESET_ALL}"
-                        f"{Fore.WHITE + Style.BRIGHT} {len(accounts)} {Style.RESET_ALL}"
-                        f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
+                        f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
+                        f"{Fore.RED+Style.BRIGHT} Data Akun (indeks {idx}) Tidak Valid (Email atau Password kosong/salah format). Melewatkan akun ini.{Style.RESET_ALL}"
                     )
+                    await asyncio.sleep(5)
+                    continue
 
-                    if not email or not "@" in email or not password:
-                        self.log(
-                            f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
-                            f"{Fore.RED+Style.BRIGHT} Data Akun ({self.mask_account(email)}) Tidak Valid (Email atau Password kosong/salah format){Style.RESET_ALL}"
-                        )
-                        continue
+                self.log(
+                    f"{Fore.CYAN + Style.BRIGHT}Akun:{Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(email)} {Style.RESET_ALL}"
+                )
 
-                    self.log(
-                        f"{Fore.CYAN + Style.BRIGHT}Akun:{Style.RESET_ALL}"
-                        f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(email)} {Style.RESET_ALL}"
-                    )
+                self.password[email] = password
 
-                    self.password[email] = password
-
-                    await self.process_accounts(email)
-                    
-                    # Tambahkan jeda waktu acak di sini
-                    random_delay = random.randint(60, 120) # Jeda acak antara 60 hingga 120 detik
-                    self.log(f"{Fore.YELLOW}Menunggu {random_delay} detik sebelum memproses akun berikutnya...{Style.RESET_ALL}")
-                    await asyncio.sleep(random_delay)
+                await self.process_accounts(email)
+                
+                # Jeda waktu acak antara 30 hingga 60 detik sebelum memproses akun berikutnya
+                random_delay = random.randint(30, 60) 
+                self.log(f"{Fore.YELLOW}Menunggu {random_delay} detik sebelum memproses akun berikutnya...{Style.RESET_ALL}")
+                await asyncio.sleep(random_delay)
 
             self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*68)
 
