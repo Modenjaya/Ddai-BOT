@@ -4,6 +4,9 @@ from datetime import datetime
 from colorama import *
 import asyncio, base64, time, json, os, pytz
 
+# Import Anti-Captcha API client (you'll need to install this: pip install anticaptchaofficial)
+from anticaptchaofficial.recaptchav2proxyless import *
+
 wib = pytz.timezone('Asia/Jakarta')
 
 class DDAI:
@@ -19,11 +22,30 @@ class DDAI:
             "User-Agent": FakeUserAgent().random
         }
         self.BASE_API = "https://auth.ddai.space"
-        self.proxies = []
-        self.proxy_index = 0
-        self.account_proxies = {}
+        # Removed proxy-related attributes as Anti-Captcha handles them
+        # self.proxies = []
+        # self.proxy_index = 0
+        # self.account_proxies = {}
         self.access_tokens = {}
         self.refresh_tokens = {}
+        self.ANTICAPTCHA_API_KEY = self.load_anticaptcha_key() # Load API key
+
+    def load_anticaptcha_key(self):
+        """Loads Anti-Captcha API key from a file."""
+        filename = "anticaptcha_key.txt"
+        try:
+            if not os.path.exists(filename):
+                self.log(f"{Fore.RED}File '{filename}' not found. Please create it and put your Anti-Captcha API key inside.{Style.RESET_ALL}")
+                return None
+            with open(filename, 'r') as f:
+                key = f.readline().strip()
+                if not key:
+                    self.log(f"{Fore.RED}Anti-Captcha API key not found in '{filename}'. Please ensure the file contains your key.{Style.RESET_ALL}")
+                    return None
+                return key
+        except Exception as e:
+            self.log(f"{Fore.RED}Failed to load Anti-Captcha API key: {e}{Style.RESET_ALL}")
+            return None
 
     def clear_terminal(self):
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -55,7 +77,7 @@ class DDAI:
         try:
             if not os.path.exists(filename):
                 self.log(f"{Fore.RED}File {filename} Not Found.{Style.RESET_ALL}")
-                return
+                return []
 
             with open(filename, 'r') as file:
                 data = json.load(file)
@@ -87,59 +109,16 @@ class DDAI:
         except Exception as e:
             return []
 
-    async def load_proxies(self, use_proxy_choice: int):
-        filename = "proxy.txt"
-        try:
-            if use_proxy_choice == 1:
-                response = await asyncio.to_thread(requests.get, "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text")
-                response.raise_for_status()
-                content = response.text
-                with open(filename, 'w') as f:
-                    f.write(content)
-                self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
-            else:
-                if not os.path.exists(filename):
-                    self.log(f"{Fore.RED + Style.BRIGHT}File {filename} Not Found.{Style.RESET_ALL}")
-                    return
-                with open(filename, 'r') as f:
-                    self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
+    # Removed proxy loading and handling methods
+    # async def load_proxies(self, use_proxy_choice: int):
+    #     ...
+    # def check_proxy_schemes(self, proxies):
+    #     ...
+    # def get_next_proxy_for_account(self, user_id):
+    #     ...
+    # def rotate_proxy_for_account(self, user_id):
+    #     ...
             
-            if not self.proxies:
-                self.log(f"{Fore.RED + Style.BRIGHT}No Proxies Found.{Style.RESET_ALL}")
-                return
-
-            self.log(
-                f"{Fore.GREEN + Style.BRIGHT}Proxies Total  : {Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT}{len(self.proxies)}{Style.RESET_ALL}"
-            )
-        
-        except Exception as e:
-            self.log(f"{Fore.RED + Style.BRIGHT}Failed To Load Proxies: {e}{Style.RESET_ALL}")
-            self.proxies = []
-
-    def check_proxy_schemes(self, proxies):
-        schemes = ["http://", "https://", "socks4://", "socks5://"]
-        if any(proxies.startswith(scheme) for scheme in schemes):
-            return proxies
-        return f"http://{proxies}"
-
-    def get_next_proxy_for_account(self, user_id):
-        if user_id not in self.account_proxies:
-            if not self.proxies:
-                return None
-            proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
-            self.account_proxies[user_id] = proxy
-            self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
-        return self.account_proxies[user_id]
-
-    def rotate_proxy_for_account(self, user_id):
-        if not self.proxies:
-            return None
-        proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
-        self.account_proxies[user_id] = proxy
-        self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
-        return proxy
-    
     def get_token_exp_time(self, token: str):
         try:
             header, payload, signature = token.split(".")
@@ -161,13 +140,10 @@ class DDAI:
             mask_account = local[:3] + '*' * 3 + local[-3:]
             return f"{mask_account}@{domain}"
     
-    def print_message(self, account, proxy, color, message):
+    def print_message(self, account, color, message): # Removed proxy from print_message
         self.log(
             f"{Fore.CYAN + Style.BRIGHT}[ Account:{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(account)} {Style.RESET_ALL}"
-            f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
-            f"{Fore.CYAN + Style.BRIGHT} Proxy: {Style.RESET_ALL}"
-            f"{Fore.WHITE + Style.BRIGHT}{proxy}{Style.RESET_ALL}"
             f"{Fore.MAGENTA + Style.BRIGHT} - {Style.RESET_ALL}"
             f"{Fore.CYAN + Style.BRIGHT}Status:{Style.RESET_ALL}"
             f"{color + Style.BRIGHT} {message} {Style.RESET_ALL}"
@@ -175,40 +151,83 @@ class DDAI:
         )
 
     def print_question(self):
+        # Simplified the proxy question as Anti-Captcha handles it
+        print(f"{Fore.WHITE + Style.BRIGHT}1. Run Without Proxy (Anti-Captcha handles it internally){Style.RESET_ALL}")
         while True:
             try:
-                print(f"{Fore.WHITE + Style.BRIGHT}1. Run With Free Proxyscrape Proxy{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}2. Run With Private Proxy{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}3. Run Without Proxy{Style.RESET_ALL}")
-                choose = int(input(f"{Fore.BLUE + Style.BRIGHT}Choose [1/2/3] -> {Style.RESET_ALL}").strip())
+                choose = int(input(f"{Fore.BLUE + Style.BRIGHT}Choose [1] -> {Style.RESET_ALL}").strip())
 
-                if choose in [1, 2, 3]:
-                    proxy_type = (
-                        "With Free Proxyscrape" if choose == 1 else 
-                        "With Private" if choose == 2 else 
-                        "Without"
-                    )
-                    print(f"{Fore.GREEN + Style.BRIGHT}Run {proxy_type} Proxy Selected.{Style.RESET_ALL}")
+                if choose == 1:
+                    print(f"{Fore.GREEN + Style.BRIGHT}Run Without Proxy Selected.{Style.RESET_ALL}")
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter either 1, 2 or 3.{Style.RESET_ALL}")
+                    print(f"{Fore.RED + Style.BRIGHT}Please enter 1.{Style.RESET_ALL}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number (1, 2 or 3).{Style.RESET_ALL}")
+                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter 1.{Style.RESET_ALL}")
 
-        rotate = False
-        if choose in [1, 2]:
-            while True:
-                rotate = input(f"{Fore.BLUE + Style.BRIGHT}Rotate Invalid Proxy? [y/n] -> {Style.RESET_ALL}").strip()
+        # Rotate proxy option is no longer relevant as Anti-Captcha handles proxies
+        return choose, False
 
-                if rotate in ["y", "n"]:
-                    rotate = rotate == "y"
-                    break
-                else:
-                    print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter 'y' or 'n'.{Style.RESET_ALL}")
+    async def solve_recaptcha_v2(self):
+        """Solves reCAPTCHA v2 using Anti-Captcha."""
+        if not self.ANTICAPTCHA_API_KEY:
+            self.log(f"{Fore.RED}Anti-Captcha API key not loaded. Cannot solve captcha.{Style.RESET_ALL}")
+            return None
 
-        return choose, rotate
+        solver = recaptchaV2Proxyless()
+        solver.set_verbose(0)
+        solver.set_key(self.ANTICAPTCHA_API_KEY)
+        
+        # You need to find the sitekey and page_url for DDAI's reCAPTCHA
+        # Example: sitekey = "YOUR_SITEKEY_HERE"
+        # Example: page_url = "https://app.ddai.space"
+        # You'll need to inspect the DDAI website to get these values.
+        # For now, I'll use placeholders.
+        sitekey = "6Lc_XXXX_XXXX-XXXX-XXXX-XXXXXXXXXXXX" # Placeholder: **REPLACE WITH ACTUAL SITEKEY**
+        page_url = "https://app.ddai.space" # Likely correct, but verify
 
-    async def onchain_trigger(self, user_id: str, proxy=None, retries=5):
+        solver.set_website_url(page_url)
+        solver.set_website_key(sitekey)
+
+        self.log(f"{Fore.YELLOW}Solving reCAPTCHA v2 with Anti-Captcha...{Style.RESET_ALL}")
+        g_response = solver.solve_and_get_solution()
+
+        if g_response != 0:
+            self.log(f"{Fore.GREEN}reCAPTCHA solved: {g_response}{Style.RESET_ALL}")
+            return g_response
+        else:
+            self.log(f"{Fore.RED}reCAPTCHA solving failed: {solver.error_code}{Style.RESET_ALL}")
+            return None
+
+    async def auth_login(self, email: str, password: str, g_recaptcha_response: str, retries=3):
+        """
+        Modified to include g_recaptcha_response for login if needed.
+        This method is not in your original script but is often required when
+        a login endpoint is protected by reCAPTCHA.
+        """
+        url = f"{self.BASE_API}/login" # Assuming a /login endpoint
+        data = json.dumps({
+            "email": email,
+            "password": password,
+            "gRecaptchaResponse": g_recaptcha_response
+        })
+        headers = {
+            **self.headers,
+            "Content-Length": str(len(data)),
+            "Content-Type": "application/json"
+        }
+        for attempt in range(retries):
+            try:
+                response = await asyncio.to_thread(requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False)
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                self.log(f"{Fore.YELLOW}Login attempt {attempt + 1}/{retries} failed: {e}{Style.RESET_ALL}")
+                await asyncio.sleep(5)
+        self.log(f"{Fore.RED}Login failed for {self.mask_account(email)} after {retries} attempts.{Style.RESET_ALL}")
+        return None
+
+    async def onchain_trigger(self, user_id: str, retries=5): # Removed proxy parameter
         url = f"{self.BASE_API}/onchainTrigger"
         headers = {
             "Accept": "application/json, text/plain, */*",
@@ -224,18 +243,18 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.post, url=url, headers=headers, proxy=proxy, timeout=60, impersonate="chrome110", verify=False)
+                response = await asyncio.to_thread(requests.post, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False) # Removed proxy
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(user_id, proxy, Fore.YELLOW, f"Onchain Trigger Failed: {Fore.RED+Style.BRIGHT}{str(e)}")
+                self.print_message(user_id, Fore.YELLOW, f"Onchain Trigger Failed: {Fore.RED+Style.BRIGHT}{str(e)}") # Removed proxy
 
         return None
 
-    async def auth_refresh(self, email: str, proxy=None, retries=5):
+    async def auth_refresh(self, email: str, retries=5): # Removed proxy parameter
         url = f"{self.BASE_API}/refresh"
         data = json.dumps({"refreshToken":self.refresh_tokens[email]})
         headers = {
@@ -245,14 +264,14 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.post, url=url, headers=headers, data=data, proxy=proxy, timeout=60, impersonate="chrome110", verify=False)
+                response = await asyncio.to_thread(requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False) # Removed proxy
                 if response.status_code == 401:
-                    self.print_message(email, proxy, Fore.RED, "Refreshing Access Token Failed: "
+                    self.print_message(email, Fore.RED, "Refreshing Access Token Failed: " # Removed proxy
                         f"{Fore.YELLOW + Style.BRIGHT}Already Expired{Style.RESET_ALL}"
                     )
                     return None
                 elif response.status_code == 403:
-                    self.print_message(email, proxy, Fore.RED, "Refreshing Access Token Failed: "
+                    self.print_message(email, Fore.RED, "Refreshing Access Token Failed: " # Removed proxy
                         f"{Fore.YELLOW + Style.BRIGHT}Invalid, PLEASE DON'T LOGOUT or OPENED DDAI DASHBOARD WHILE BOT RUNNING{Style.RESET_ALL}"
                     )
                     return None
@@ -262,11 +281,11 @@ class DDAI:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(email, proxy, Fore.YELLOW, f"Refreshing Access Token Failed: {Fore.RED+Style.BRIGHT}{str(e)}")
+                self.print_message(email, Fore.YELLOW, f"Refreshing Access Token Failed: {Fore.RED+Style.BRIGHT}{str(e)}") # Removed proxy
 
         return None
             
-    async def model_response(self, email: str, use_proxy: bool, rotate_proxy: bool, proxy=None, retries=5):
+    async def model_response(self, email: str, retries=5): # Removed proxy and use_proxy, rotate_proxy parameters
         url = f"{self.BASE_API}/modelResponse"
         headers = {
             **self.headers,
@@ -274,9 +293,9 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.get, url=url, headers=headers, proxy=proxy, timeout=60, impersonate="chrome110", verify=False)
+                response = await asyncio.to_thread(requests.get, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False) # Removed proxy
                 if response.status_code == 401:
-                    await self.process_auth_refresh(email, use_proxy, rotate_proxy)
+                    await self.process_auth_refresh(email) # Removed proxy parameters
                     headers["Authorization"] = f"Bearer {self.access_tokens[email]}"
                     continue
                 response.raise_for_status()
@@ -285,11 +304,11 @@ class DDAI:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(email, proxy, Fore.YELLOW, f"GET Troughput Data Failed: {Fore.RED+Style.BRIGHT}{str(e)}")
+                self.print_message(email, Fore.YELLOW, f"GET Troughput Data Failed: {Fore.RED+Style.BRIGHT}{str(e)}") # Removed proxy
 
         return None
     
-    async def mission_lists(self, email: str, use_proxy: bool, rotate_proxy: bool, proxy=None, retries=5):
+    async def mission_lists(self, email: str, retries=5): # Removed proxy and use_proxy, rotate_proxy parameters
         url = f"{self.BASE_API}/missions"
         headers = {
             **self.headers,
@@ -297,9 +316,9 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.get, url=url, headers=headers, proxy=proxy, timeout=60, impersonate="chrome110", verify=False)
+                response = await asyncio.to_thread(requests.get, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False) # Removed proxy
                 if response.status_code == 401:
-                    await self.process_auth_refresh(email, use_proxy, rotate_proxy)
+                    await self.process_auth_refresh(email) # Removed proxy parameters
                     headers["Authorization"] = f"Bearer {self.access_tokens[email]}"
                     continue
                 response.raise_for_status()
@@ -308,11 +327,11 @@ class DDAI:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(email, proxy, Fore.YELLOW, f"GET Mission Lists Failed: {Fore.RED+Style.BRIGHT}{str(e)}")
+                self.print_message(email, Fore.YELLOW, f"GET Mission Lists Failed: {Fore.RED+Style.BRIGHT}{str(e)}") # Removed proxy
 
         return None
     
-    async def complete_missions(self, email: str, mission_id: str, title: str, use_proxy: bool, rotate_proxy: bool, proxy=None, retries=5):
+    async def complete_missions(self, email: str, mission_id: str, title: str, retries=5): # Removed proxy and use_proxy, rotate_proxy parameters
         url = f"{self.BASE_API}/missions/claim/{mission_id}"
         headers = {
             **self.headers,
@@ -321,9 +340,9 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.post, url=url, headers=headers, proxy=proxy, timeout=60, impersonate="chrome110", verify=False)
+                response = await asyncio.to_thread(requests.post, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False) # Removed proxy
                 if response.status_code == 401:
-                    await self.process_auth_refresh(email, use_proxy, rotate_proxy)
+                    await self.process_auth_refresh(email) # Removed proxy parameters
                     headers["Authorization"] = f"Bearer {self.access_tokens[email]}"
                     continue
                 response.raise_for_status()
@@ -332,89 +351,80 @@ class DDAI:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(email, proxy, Fore.WHITE, f"Mission {title}"
+                self.print_message(email, Fore.WHITE, f"Mission {title}" # Removed proxy
                     f"{Fore.RED + Style.BRIGHT} Not Completed: {Style.RESET_ALL}"
                     f"{Fore.YELLOW + Style.BRIGHT}{str(e)}{Style.RESET_ALL}"
                 )
 
         return None
 
-    async def process_auth_refresh(self, email: str, use_proxy: bool, rotate_proxy: bool):
+    async def process_auth_refresh(self, email: str): # Removed use_proxy, rotate_proxy parameters
         while True:
-            proxy = self.get_next_proxy_for_account(email) if use_proxy else None
-
-            refresh = await self.auth_refresh(email, proxy)
+            # Proxy handling is removed here as Anti-Captcha handles it
+            refresh = await self.auth_refresh(email) # Removed proxy parameter
             if refresh:
                 self.access_tokens[email] = refresh["data"]["accessToken"]
 
                 self.save_tokens([{"Email":email, "accessToken":self.access_tokens[email], "refreshToken":self.refresh_tokens[email]}])
-                self.print_message(email, proxy, Fore.GREEN, "Refreshing Access Token Success")
+                self.print_message(email, Fore.GREEN, "Refreshing Access Token Success") # Removed proxy
                 return True
             
-            if rotate_proxy:
-                proxy = self.rotate_proxy_for_account(email)
-
+            # Removed rotate_proxy logic
             await asyncio.sleep(5)
             continue
         
-    async def check_token_exp_time(self, email: str, use_proxy: bool, rotate_proxy: bool):
+    async def check_token_exp_time(self, email: str): # Removed use_proxy, rotate_proxy parameters
         exp_time = self.get_token_exp_time(self.access_tokens[email])
 
         if int(time.time()) > exp_time:
-            proxy = self.get_next_proxy_for_account(email) if use_proxy else None
-
-            self.print_message(email, proxy, Fore.YELLOW, "Access Token Expired, Refreshing...")
-            await self.process_auth_refresh(email, use_proxy, rotate_proxy)
+            # Proxy handling is removed here as Anti-Captcha handles it
+            self.print_message(email, Fore.YELLOW, "Access Token Expired, Refreshing...") # Removed proxy
+            await self.process_auth_refresh(email) # Removed proxy parameters
 
         return True
 
-    async def looping_auth_refresh(self, email: str, use_proxy: bool, rotate_proxy: bool):
+    async def looping_auth_refresh(self, email: str): # Removed use_proxy, rotate_proxy parameters
         while True:
             await asyncio.sleep(10 * 60)
-            await self.process_auth_refresh(email, use_proxy, rotate_proxy)
+            await self.process_auth_refresh(email) # Removed proxy parameters
 
-    async def process_onchain_trigger(self, email: str, use_proxy: bool, rotate_proxy: bool):
-        is_valid = await self.check_token_exp_time(email, use_proxy, rotate_proxy)
+    async def process_onchain_trigger(self, email: str): # Removed use_proxy, rotate_proxy parameters
+        is_valid = await self.check_token_exp_time(email) # Removed proxy parameters
         if is_valid:
             while True:
-                proxy = self.get_next_proxy_for_account(email) if use_proxy else None
-
-                model = await self.onchain_trigger(email, proxy)
+                # Proxy handling is removed here as Anti-Captcha handles it
+                model = await self.onchain_trigger(email) # Removed proxy parameter
                 if model:
                     req_total = model.get("data", {}).get("requestsTotal", 0)
-                    self.print_message(email, proxy, Fore.GREEN, "Onchain Triggered Successfully "
+                    self.print_message(email, Fore.GREEN, "Onchain Triggered Successfully " # Removed proxy
                         f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
                         f"{Fore.CYAN + Style.BRIGHT} Total Requests: {Style.RESET_ALL}"
                         f"{Fore.WHITE + Style.BRIGHT}{req_total}{Style.RESET_ALL}"
                     )
                     return True
                 
-                if rotate_proxy:
-                    proxy = self.rotate_proxy_for_account(email)
-
+                # Removed rotate_proxy logic
                 await asyncio.sleep(5)
                 continue
         
-    async def process_model_response(self, email: str, use_proxy: bool, rotate_proxy: bool):
+    async def process_model_response(self, email: str): # Removed use_proxy, rotate_proxy parameters
         while True:
-            proxy = self.get_next_proxy_for_account(email) if use_proxy else None
-
-            model = await self.model_response(email, use_proxy, rotate_proxy, proxy)
+            # Proxy handling is removed here as Anti-Captcha handles it
+            model = await self.model_response(email) # Removed proxy parameters
             if model:
                 throughput = model.get("data", {}).get("throughput", 0)
                 formatted_throughput = self.biner_to_desimal(throughput)
 
-                self.print_message(email, proxy, Fore.GREEN, "Throughput "
+                self.print_message(email, Fore.GREEN, "Throughput " # Removed proxy
                     f"{Fore.WHITE + Style.BRIGHT}{formatted_throughput}%{Style.RESET_ALL}"
                 )
 
             await asyncio.sleep(60)
 
-    async def process_user_missions(self, email: str, use_proxy: bool, rotate_proxy: bool):
+    async def process_user_missions(self, email: str): # Removed use_proxy, rotate_proxy parameters
         while True:
-            proxy = self.get_next_proxy_for_account(email) if use_proxy else None
-
-            mission_lists = await self.mission_lists(email, use_proxy, rotate_proxy, proxy)
+            # Proxy handling is removed here as Anti-Captcha handles it
+            mission_lists = await self.mission_lists(email) # Removed proxy parameters
             if mission_lists:
                 missions = mission_lists.get("data", {}).get("missions", [])
 
@@ -431,40 +441,39 @@ class DDAI:
 
                             if type == 3:
                                 if status == "COMPLETED":
-                                    claim = await self.complete_missions(email, mission_id, title, use_proxy, rotate_proxy, proxy)
+                                    claim = await self.complete_missions(email, mission_id, title) # Removed proxy parameters
                                     if claim and claim.get("data", {}).get("claimed"):
-                                        self.print_message(email, proxy, Fore.WHITE, f"Mission {title}"
+                                        self.print_message(email, Fore.WHITE, f"Mission {title}" # Removed proxy
                                             f"{Fore.GREEN + Style.BRIGHT} Is Completed {Style.RESET_ALL}"
                                             f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
                                             f"{Fore.CYAN + Style.BRIGHT} Reward: {Style.RESET_ALL}"
                                             f"{Fore.WHITE + Style.BRIGHT}{reward} Requests{Style.RESET_ALL}"
                                         )
-                                
                             else:
                                 if status == "PENDING":
-                                    claim = await self.complete_missions(email, mission_id, title, use_proxy, rotate_proxy, proxy)
+                                    claim = await self.complete_missions(email, mission_id, title) # Removed proxy parameters
                                     if claim and claim.get("data", {}).get("claimed"):
-                                        self.print_message(email, proxy, Fore.WHITE, f"Mission {title}"
+                                        self.print_message(email, Fore.WHITE, f"Mission {title}" # Removed proxy
                                             f"{Fore.GREEN + Style.BRIGHT} Is Completed {Style.RESET_ALL}"
                                             f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
                                             f"{Fore.CYAN + Style.BRIGHT} Reward: {Style.RESET_ALL}"
                                             f"{Fore.WHITE + Style.BRIGHT}{reward} Requests{Style.RESET_ALL}"
                                         )
-                        else:
-                            completed = True
+                            else:
+                                completed = True
 
                     if completed:
-                        self.print_message(email, proxy, Fore.GREEN, "All Available Mission Is Completed")
+                        self.print_message(email, Fore.GREEN, "All Available Mission Is Completed") # Removed proxy
 
             await asyncio.sleep(24 * 60 * 60)
         
-    async def process_accounts(self, email: str, use_proxy: bool, rotate_proxy: bool):
-        triggered = await self.process_onchain_trigger(email, use_proxy, rotate_proxy)
+    async def process_accounts(self, email: str): # Removed use_proxy, rotate_proxy parameters
+        triggered = await self.process_onchain_trigger(email) # Removed proxy parameters
         if triggered:
             tasks = [
-                asyncio.create_task(self.looping_auth_refresh(email, use_proxy, rotate_proxy)),
-                asyncio.create_task(self.process_model_response(email, use_proxy, rotate_proxy)),
-                asyncio.create_task(self.process_user_missions(email, use_proxy, rotate_proxy))
+                asyncio.create_task(self.looping_auth_refresh(email)), # Removed proxy parameters
+                asyncio.create_task(self.process_model_response(email)), # Removed proxy parameters
+                asyncio.create_task(self.process_user_missions(email)) # Removed proxy parameters
             ]
             await asyncio.gather(*tasks)
     
@@ -475,11 +484,12 @@ class DDAI:
                 self.log(f"{Fore.RED + Style.BRIGHT}No Accounts Loaded.{Style.RESET_ALL}")
                 return
             
-            use_proxy_choice, rotate_proxy = self.print_question()
+            # Removed proxy choice as Anti-Captcha handles it
+            use_proxy_choice, rotate_proxy = self.print_question() # This now only asks for '1'
 
-            use_proxy = False
-            if use_proxy_choice in [1, 2]:
-                use_proxy = True
+            # The `use_proxy` variable is no longer functionally used for proxy logic,
+            # but we keep it here to simplify parameter removal in other functions.
+            use_proxy = False 
 
             self.clear_terminal()
             self.welcome()
@@ -488,8 +498,9 @@ class DDAI:
                 f"{Fore.WHITE + Style.BRIGHT}{len(tokens)}{Style.RESET_ALL}"
             )
 
-            if use_proxy:
-                await self.load_proxies(use_proxy_choice)
+            # Removed proxy loading
+            # if use_proxy:
+            #     await self.load_proxies(use_proxy_choice)
 
             self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*75)
 
@@ -526,7 +537,7 @@ class DDAI:
                     self.access_tokens[email] = access_token
                     self.refresh_tokens[email] = refresh_token
 
-                    tasks.append(asyncio.create_task(self.process_accounts(email, use_proxy, rotate_proxy)))
+                    tasks.append(asyncio.create_task(self.process_accounts(email))) # Removed proxy parameters
 
             await asyncio.gather(*tasks)
 
@@ -542,5 +553,5 @@ if __name__ == "__main__":
         print(
             f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-            f"{Fore.RED + Style.BRIGHT}[ EXIT ] DDAI Network - BOT{Style.RESET_ALL}                                      ",                                       
+            f"{Fore.RED + Style.BRIGHT}[ EXIT ] DDAI Network - BOT{Style.RESET_ALL}                                      ",
         )
