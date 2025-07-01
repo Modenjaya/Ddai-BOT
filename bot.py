@@ -1,4 +1,4 @@
-from curl_cffi import requests
+from curl_cffi import requests as cffi_requests # Memberi alias untuk requests dari curl_cffi
 from fake_useragent import FakeUserAgent
 from datetime import datetime
 from colorama import *
@@ -22,14 +22,9 @@ class DDAI:
             "User-Agent": FakeUserAgent().random
         }
         self.BASE_API = "https://auth.ddai.space"
-        self.PAGE_URL = "https://app.ddai.space" # URL halaman tempat Turnstile muncul
-        self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1" # Kunci situs Cloudflare Turnstile Anda
+        self.PAGE_URL = "https://app.ddai.space" # URL halaman tempat Turnstile muncul (meskipun mungkin tidak digunakan langsung di bot.py ini)
+        self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1" # Kunci situs Cloudflare Turnstile Anda (juga mungkin tidak digunakan langsung di sini)
         self.ANTICAPTCHA_API_KEY = self.load_anticaptcha_key() # Muat kunci API Anti-Captcha
-
-        # Hapus semua atribut terkait proxy manual
-        # self.proxies = []
-        # self.proxy_index = 0
-        # self.account_proxies = {}
 
         self.access_tokens = {}
         self.refresh_tokens = {}
@@ -112,16 +107,6 @@ class DDAI:
 
         except Exception as e:
             return []
-
-    # Hapus semua metode terkait proxy manual
-    # async def load_proxies(self, use_proxy_choice: int):
-    #     ...
-    # def check_proxy_schemes(self, proxies):
-    #     ...
-    # def get_next_proxy_for_account(self, user_id):
-    #     ...
-    # def rotate_proxy_for_account(self, user_id):
-    #     ...
             
     def get_token_exp_time(self, token: str):
         try:
@@ -144,7 +129,7 @@ class DDAI:
             mask_account = local[:3] + '*' * 3 + local[-3:]
             return f"{mask_account}@{domain}"
     
-    def print_message(self, account, color, message): # Hapus parameter proxy
+    def print_message(self, account, color, message):
         self.log(
             f"{Fore.CYAN + Style.BRIGHT}[ Akun:{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(account)} {Style.RESET_ALL}"
@@ -155,7 +140,6 @@ class DDAI:
         )
 
     def print_question(self):
-        # Sederhanakan pertanyaan proxy karena Anti-Captcha menanganinya
         print(f"{Fore.WHITE + Style.BRIGHT}1. Jalankan Tanpa Proxy (Anti-Captcha menanganinya secara internal){Style.RESET_ALL}")
         while True:
             try:
@@ -169,14 +153,9 @@ class DDAI:
             except ValueError:
                 print(f"{Fore.RED + Style.BRIGHT}Input tidak valid. Masukkan 1.{Style.RESET_ALL}")
 
-        # Opsi rotasi tidak lagi relevan
         return choose, False
 
-    # Fungsi solve_recaptcha_v2 tidak lagi relevan, ini adalah Turnstile
-    # async def solve_recaptcha_v2(self):
-    #     ...
-
-    async def onchain_trigger(self, user_id: str, retries=5): # Hapus parameter proxy
+    async def onchain_trigger(self, user_id: str, retries=5):
         url = f"{self.BASE_API}/onchainTrigger"
         headers = {
             "Accept": "application/json, text/plain, */*",
@@ -192,18 +171,19 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.post, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False) # Hapus proxy
+                # Menggunakan cffi_requests.post
+                response = await asyncio.to_thread(cffi_requests.post, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False)
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(user_id, Fore.YELLOW, f"Onchain Trigger Gagal: {Fore.RED+Style.BRIGHT}{str(e)}") # Hapus proxy
+                self.print_message(user_id, Fore.YELLOW, f"Onchain Trigger Gagal: {Fore.RED+Style.BRIGHT}{str(e)}")
 
         return None
 
-    async def auth_refresh(self, email: str, retries=5): # Hapus parameter proxy
+    async def auth_refresh(self, email: str, retries=5):
         url = f"{self.BASE_API}/refresh"
         data = json.dumps({"refreshToken":self.refresh_tokens[email]})
         headers = {
@@ -213,14 +193,15 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False) # Hapus proxy
+                # Menggunakan cffi_requests.post
+                response = await asyncio.to_thread(cffi_requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False)
                 if response.status_code == 401:
-                    self.print_message(email, Fore.RED, "Refresh Token Akses Gagal: " # Hapus proxy
+                    self.print_message(email, Fore.RED, "Refresh Token Akses Gagal: "
                         f"{Fore.YELLOW + Style.BRIGHT}Sudah Kadaluarsa{Style.RESET_ALL}"
                     )
                     return None
                 elif response.status_code == 403:
-                    self.print_message(email, Fore.RED, "Refresh Token Akses Gagal: " # Hapus proxy
+                    self.print_message(email, Fore.RED, "Refresh Token Akses Gagal: "
                         f"{Fore.YELLOW + Style.BRIGHT}Tidak Valid, JANGAN LOGOUT atau BUKA DASHBOARD DDAI SAAT BOT BERJALAN{Style.RESET_ALL}"
                     )
                     return None
@@ -230,11 +211,11 @@ class DDAI:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(email, Fore.YELLOW, f"Refresh Token Akses Gagal: {Fore.RED+Style.BRIGHT}{str(e)}") # Hapus proxy
+                self.print_message(email, Fore.YELLOW, f"Refresh Token Akses Gagal: {Fore.RED+Style.BRIGHT}{str(e)}")
 
         return None
             
-    async def model_response(self, email: str, retries=5): # Hapus parameter proxy dan use_proxy, rotate_proxy
+    async def model_response(self, email: str, retries=5):
         url = f"{self.BASE_API}/modelResponse"
         headers = {
             **self.headers,
@@ -242,9 +223,10 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.get, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False) # Hapus proxy
+                # Menggunakan cffi_requests.get
+                response = await asyncio.to_thread(cffi_requests.get, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False)
                 if response.status_code == 401:
-                    await self.process_auth_refresh(email) # Hapus parameter proxy
+                    await self.process_auth_refresh(email)
                     headers["Authorization"] = f"Bearer {self.access_tokens[email]}"
                     continue
                 response.raise_for_status()
@@ -253,11 +235,11 @@ class DDAI:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(email, Fore.YELLOW, f"GET Data Throughput Gagal: {Fore.RED+Style.BRIGHT}{str(e)}") # Hapus proxy
+                self.print_message(email, Fore.YELLOW, f"GET Data Throughput Gagal: {Fore.RED+Style.BRIGHT}{str(e)}")
 
         return None
     
-    async def mission_lists(self, email: str, retries=5): # Hapus parameter proxy dan use_proxy, rotate_proxy
+    async def mission_lists(self, email: str, retries=5):
         url = f"{self.BASE_API}/missions"
         headers = {
             **self.headers,
@@ -265,9 +247,10 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.get, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False) # Hapus proxy
+                # Menggunakan cffi_requests.get
+                response = await asyncio.to_thread(cffi_requests.get, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False)
                 if response.status_code == 401:
-                    await self.process_auth_refresh(email) # Hapus parameter proxy
+                    await self.process_auth_refresh(email)
                     headers["Authorization"] = f"Bearer {self.access_tokens[email]}"
                     continue
                 response.raise_for_status()
@@ -276,11 +259,11 @@ class DDAI:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(email, Fore.YELLOW, f"GET Daftar Misi Gagal: {Fore.RED+Style.BRIGHT}{str(e)}") # Hapus proxy
+                self.print_message(email, Fore.YELLOW, f"GET Daftar Misi Gagal: {Fore.RED+Style.BRIGHT}{str(e)}")
 
         return None
     
-    async def complete_missions(self, email: str, mission_id: str, title: str, retries=5): # Hapus parameter proxy dan use_proxy, rotate_proxy
+    async def complete_missions(self, email: str, mission_id: str, title: str, retries=5):
         url = f"{self.BASE_API}/missions/claim/{mission_id}"
         headers = {
             **self.headers,
@@ -289,91 +272,86 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.post, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False) # Hapus proxy
-                if response.status_code == 401:
-                    await self.process_auth_refresh(email) # Hapus parameter proxy
-                    headers["Authorization"] = f"Bearer {self.access_tokens[email]}"
-                    continue
+                # Menggunakan cffi_requests.post
+                response = await asyncio.to_thread(cffi_requests.post, url=url, headers=headers, timeout=60, impersonate="chrome110", verify=False)
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
-                self.print_message(email, Fore.WHITE, f"Misi {title}" # Hapus proxy
+                self.print_message(email, Fore.WHITE, f"Misi {title}"
                     f"{Fore.RED + Style.BRIGHT} Tidak Selesai: {Style.RESET_ALL}"
                     f"{Fore.YELLOW + Style.BRIGHT}{str(e)}{Style.RESET_ALL}"
                 )
 
         return None
 
-    async def process_auth_refresh(self, email: str): # Hapus parameter use_proxy, rotate_proxy
+    async def process_auth_refresh(self, email: str):
         while True:
-            refresh = await self.auth_refresh(email) # Hapus parameter proxy
+            refresh = await self.auth_refresh(email)
             if refresh:
                 self.access_tokens[email] = refresh["data"]["accessToken"]
 
                 self.save_tokens([{"Email":email, "accessToken":self.access_tokens[email], "refreshToken":self.refresh_tokens[email]}])
-                self.print_message(email, Fore.GREEN, "Refresh Token Akses Berhasil") # Hapus proxy
+                self.print_message(email, Fore.GREEN, "Refresh Token Akses Berhasil")
                 return True
             
-            # Logika rotasi proxy dihapus
             await asyncio.sleep(5)
             continue
         
-    async def check_token_exp_time(self, email: str): # Hapus parameter use_proxy, rotate_proxy
+    async def check_token_exp_time(self, email: str):
         exp_time = self.get_token_exp_time(self.access_tokens[email])
 
-        if int(time.time()) > exp_time:
-            self.print_message(email, Fore.YELLOW, "Token Akses Kadaluarsa, Merefresh...") # Hapus proxy
-            await self.process_auth_refresh(email) # Hapus parameter proxy
+        if exp_time is None or int(time.time()) > exp_time:
+            self.print_message(email, Fore.YELLOW, "Token Akses Kadaluarsa, Merefresh...")
+            await self.process_auth_refresh(email)
 
         return True
 
-    async def looping_auth_refresh(self, email: str): # Hapus parameter use_proxy, rotate_proxy
+    async def looping_auth_refresh(self, email: str):
         while True:
             await asyncio.sleep(10 * 60)
-            await self.process_auth_refresh(email) # Hapus parameter proxy
+            await self.process_auth_refresh(email)
 
-    async def process_onchain_trigger(self, email: str): # Hapus parameter use_proxy, rotate_proxy
-        is_valid = await self.check_token_exp_time(email) # Hapus parameter proxy
+    async def process_onchain_trigger(self, email: str):
+        is_valid = await self.check_token_exp_time(email)
         if is_valid:
             while True:
-                model = await self.onchain_trigger(email) # Hapus parameter proxy
+                model = await self.onchain_trigger(email)
                 if model:
                     req_total = model.get("data", {}).get("requestsTotal", 0)
-                    self.print_message(email, Fore.GREEN, "Onchain Berhasil Dipicu " # Hapus proxy
+                    self.print_message(email, Fore.GREEN, "Onchain Berhasil Dipicu "
                         f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
                         f"{Fore.CYAN + Style.BRIGHT} Total Permintaan: {Style.RESET_ALL}"
                         f"{Fore.WHITE + Style.BRIGHT}{req_total}{Style.RESET_ALL}"
                     )
                     return True
                 
-                # Logika rotasi proxy dihapus
                 await asyncio.sleep(5)
                 continue
         
-    async def process_model_response(self, email: str): # Hapus parameter use_proxy, rotate_proxy
+    async def process_model_response(self, email: str):
         while True:
-            model = await self.model_response(email) # Hapus parameter proxy
+            model = await self.model_response(email)
             if model:
                 throughput = model.get("data", {}).get("throughput", 0)
                 formatted_throughput = self.biner_to_desimal(throughput)
 
-                self.print_message(email, Fore.GREEN, "Throughput " # Hapus proxy
+                self.print_message(email, Fore.GREEN, "Throughput "
                     f"{Fore.WHITE + Style.BRIGHT}{formatted_throughput}%{Style.RESET_ALL}"
                 )
 
             await asyncio.sleep(60)
 
-    async def process_user_missions(self, email: str): # Hapus parameter use_proxy, rotate_proxy
+    async def process_user_missions(self, email: str):
         while True:
             mission_lists = await self.mission_lists(email)
             if mission_lists:
                 missions = mission_lists.get("data", {}).get("missions", [])
 
                 if missions:
-                    any_claimable_missions_found = False # Flag untuk melacak apakah ada misi yang bisa diklaim/sudah diklaim dalam siklus ini
+                    any_claimable_missions_found = False 
 
                     for mission in missions:
                         if mission:
@@ -383,7 +361,6 @@ class DDAI:
                             type = mission.get("type")
                             status = mission.get("status")
 
-                            # Logika untuk mengklaim misi
                             if (type == 3 and status == "COMPLETED") or (status == "PENDING"):
                                 claim = await self.complete_missions(email, mission_id, title)
                                 if claim and claim.get("data", {}).get("claimed"):
@@ -393,25 +370,22 @@ class DDAI:
                                         f"{Fore.CYAN + Style.BRIGHT} Hadiah: {Style.RESET_ALL}"
                                         f"{Fore.WHITE + Style.BRIGHT}{reward} Permintaan{Style.RESET_ALL}"
                                     )
-                                    any_claimable_missions_found = True # Set flag jika misi diproses
-                            # Tidak ada else di sini, karena jika tidak memenuhi kondisi di atas,
-                            # misi tidak perlu diklaim dan tidak mempengaruhi any_claimable_missions_found
-                            # sampai misi yang *bisa* diklaim ditemukan.
+                                    any_claimable_missions_found = True 
 
                     if not any_claimable_missions_found:
                         self.print_message(email, Fore.GREEN, "Semua Misi yang Tersedia Telah Selesai (Tidak ada yang perlu diklaim saat ini)")
                 else:
                     self.print_message(email, Fore.GREEN, "Tidak ada misi yang tersedia.")
 
-            await asyncio.sleep(24 * 60 * 60) # Cek misi setiap 24 jam
+            await asyncio.sleep(24 * 60 * 60)
         
-    async def process_accounts(self, email: str): # Hapus parameter use_proxy, rotate_proxy
-        triggered = await self.process_onchain_trigger(email) # Hapus parameter proxy
+    async def process_accounts(self, email: str):
+        triggered = await self.process_onchain_trigger(email)
         if triggered:
             tasks = [
-                asyncio.create_task(self.looping_auth_refresh(email)), # Hapus parameter proxy
-                asyncio.create_task(self.process_model_response(email)), # Hapus parameter proxy
-                asyncio.create_task(self.process_user_missions(email)) # Hapus parameter proxy
+                asyncio.create_task(self.looping_auth_refresh(email)),
+                asyncio.create_task(self.process_model_response(email)),
+                asyncio.create_task(self.process_user_missions(email))
             ]
             await asyncio.gather(*tasks)
     
@@ -422,18 +396,11 @@ class DDAI:
                 self.log(f"{Fore.RED + Style.BRIGHT}Tidak Ada Akun yang Dimuat.{Style.RESET_ALL}")
                 return
             
-            # Memuat kunci Anti-Captcha
             if not self.ANTICAPTCHA_API_KEY:
                 self.log(f"{Fore.RED + Style.BRIGHT}Kunci API Anti-Captcha tidak tersedia. Harap periksa file 'anticaptcha_key.txt'.{Style.RESET_ALL}")
                 return
 
-            use_proxy_choice, rotate_proxy = self.print_question() # Ini sekarang hanya akan menanyakan '1'
-
-            # Variabel `use_proxy` tidak lagi digunakan secara fungsional untuk logika proxy,
-            # tetapi kita menyimpannya di sini untuk menyederhanakan penghapusan parameter dalam fungsi lain.
-            # use_proxy = False 
-            # if use_proxy_choice == 1: # Karena hanya ada satu pilihan sekarang
-            #     use_proxy = True
+            use_proxy_choice, rotate_proxy = self.print_question()
 
             self.clear_terminal()
             self.welcome()
@@ -441,10 +408,6 @@ class DDAI:
                 f"{Fore.GREEN + Style.BRIGHT}Total Akun: {Style.RESET_ALL}"
                 f"{Fore.WHITE + Style.BRIGHT}{len(tokens)}{Style.RESET_ALL}"
             )
-
-            # Penghapusan pemuatan proxy manual
-            # if use_proxy:
-            #     await self.load_proxies(use_proxy_choice)
 
             self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*75)
 
@@ -466,12 +429,8 @@ class DDAI:
                         )
                         continue
 
-                    # Perbaikan: get_token_exp_time harus memeriksa token akses, bukan refresh token
-                    # karena refresh token tidak memiliki 'exp' di payload JWT-nya
-                    # Namun, jika refresh token yang Anda maksud juga JWT, maka biarkan saja.
-                    # Asumsi: refresh_token juga JWT dengan 'exp'
                     exp_time = self.get_token_exp_time(refresh_token)
-                    if exp_time is None or int(time.time()) > exp_time: # Tambahkan cek None
+                    if exp_time is None or int(time.time()) > exp_time:
                         self.log(
                             f"{Fore.CYAN + Style.BRIGHT}[ Akun: {Style.RESET_ALL}"
                             f"{Fore.WHITE + Style.BRIGHT}{idx}{Style.RESET_ALL}"
@@ -485,7 +444,7 @@ class DDAI:
                     self.access_tokens[email] = access_token
                     self.refresh_tokens[email] = refresh_token
 
-                    tasks.append(asyncio.create_task(self.process_accounts(email))) # Hapus parameter proxy
+                    tasks.append(asyncio.create_task(self.process_accounts(email)))
 
             await asyncio.gather(*tasks)
 
