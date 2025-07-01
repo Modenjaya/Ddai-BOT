@@ -11,15 +11,15 @@ class DDAI:
         self.headers = {
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Origin": "https://app.ddai.network",
-            "Referer": "https://app.ddai.network/",
+            "Origin": "https://app.ddai.space",
+            "Referer": "https://app.ddai.space/",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-site",
             "User-Agent": FakeUserAgent().random
         }
-        self.BASE_API = "https://auth.ddai.network"
-        self.PAGE_URL = "https://app.ddai.network"
+        self.BASE_API = "https://auth.ddai.space"
+        self.PAGE_URL = "https://app.ddai.space"
         self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1"
         self.CAPTCHA_KEY = None
         self.proxies = []
