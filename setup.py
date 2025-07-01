@@ -1,4 +1,4 @@
-from curl_cffi import requests
+from curl_cffi import requests as cffi_requests # Beri alias untuk requests dari curl_cffi
 from fake_useragent import FakeUserAgent
 from datetime import datetime
 from colorama import *
@@ -25,12 +25,6 @@ class DDAI:
         self.PAGE_URL = "https://app.ddai.space" # URL halaman tempat Turnstile muncul
         self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1" # Kunci situs Cloudflare Turnstile Anda
         self.ANTICAPTCHA_API_KEY = self.load_anticaptcha_key() # Muat kunci API Anti-Captcha
-
-        # Hapus semua atribut terkait proxy manual
-        # self.proxies = []
-        # self.proxy_index = 0
-        # self.account_proxies = {}
-        # self.CAPTCHA_KEY = None # Tidak lagi diperlukan karena Anti-Captcha
 
         self.captcha_tokens = {}
         self.password = {}
@@ -114,20 +108,6 @@ class DDAI:
         except Exception as e:
             return []
             
-    # Hapus metode load_2captcha_key
-    # def load_2captcha_key(self):
-    #     ...
-
-    # Hapus semua metode terkait proxy manual
-    # async def load_proxies(self, use_proxy_choice: int):
-    #     ...
-    # def check_proxy_schemes(self, proxies):
-    #     ...
-    # def get_next_proxy_for_account(self, user_id):
-    #     ...
-    # def rotate_proxy_for_account(self, user_id):
-    #     ...
-            
     def mask_account(self, account):
         if '@' in account:
             local, domain = account.split('@', 1)
@@ -135,7 +115,6 @@ class DDAI:
             return f"{mask_account}@{domain}"
 
     def print_question(self):
-        # Pilihan proxy disederhanakan karena Anti-Captcha menanganinya secara internal
         print(f"{Fore.WHITE + Style.BRIGHT}1. Jalankan Tanpa Proxy (Anti-Captcha menanganinya secara internal){Style.RESET_ALL}")
         while True:
             try:
@@ -143,28 +122,28 @@ class DDAI:
 
                 if choose == 1:
                     print(f"{Fore.GREEN + Style.BRIGHT}Pilihan Jalankan Tanpa Proxy Terpilih.{Style.RESET_ALL}")
-                    return choose # Mengembalikan 1
+                    return choose
                 else:
                     print(f"{Fore.RED + Style.BRIGHT}Harap masukkan 1.{Style.RESET_ALL}")
             except ValueError:
                 print(f"{Fore.RED + Style.BRIGHT}Input tidak valid. Masukkan angka (1).{Style.RESET_ALL}")
     
-    async def solve_cf_turnstile(self, email: str, retries=5): # Parameter proxy dihapus
+    async def solve_cf_turnstile(self, email: str, retries=5):
         if not self.ANTICAPTCHA_API_KEY:
             self.log(f"{Fore.RED}Kunci API Anti-Captcha tidak dimuat. Tidak dapat menyelesaikan captcha.{Style.RESET_ALL}")
             return None
 
-        solver = turnstileProxyless() # Menggunakan turnstileProxyless
-        solver.set_verbose(0) # Atur ke 0 untuk output yang lebih bersih
+        solver = turnstileProxyless()
+        solver.set_verbose(0)
         solver.set_key(self.ANTICAPTCHA_API_KEY)
         
         solver.set_website_url(self.PAGE_URL)
         solver.set_website_key(self.SITE_KEY)
-        solver.set_soft_id(0) # Opsional: set softId jika Anda memilikinya
+        solver.set_soft_id(0)
 
         self.log(f"{Fore.YELLOW}Memulai penyelesaian Cloudflare Turnstile dengan Anti-Captcha...{Style.RESET_ALL}")
         
-        g_response = solver.solve_and_return_solution()
+        g_response = solver.solve_and_return_solution() # Perbaikan di sini: solve_and_return_solution()
 
         if g_response != 0:
             self.log(f"{Fore.GREEN}Cloudflare Turnstile terpecahkan: {g_response}{Style.RESET_ALL}")
@@ -174,7 +153,7 @@ class DDAI:
             self.log(f"{Fore.RED}Gagal menyelesaikan Cloudflare Turnstile: {solver.error_code}{Style.RESET_ALL}")
             return None
 
-    async def auth_login(self, email: str, retries=5): # Parameter proxy dihapus
+    async def auth_login(self, email: str, retries=5):
         url = f"{self.BASE_API}/login"
         data = json.dumps({"email":email, "password":self.password[email], "captchaToken":self.captcha_tokens[email]})
         headers = {
@@ -184,7 +163,7 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False) # Parameter proxy dihapus
+                response = await asyncio.to_thread(cffi_requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False) # Perbaikan di sini: cffi_requests
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
@@ -200,16 +179,15 @@ class DDAI:
 
         return None
         
-    async def process_accounts(self, email: str): # Parameter use_proxy dihapus
-        # Proxy ditangani oleh Anti-Captcha, tidak ada logika proxy manual di sini
+    async def process_accounts(self, email: str):
         self.log(
             f"{Fore.CYAN + Style.BRIGHT}Proxy  :{Style.RESET_ALL}"
-            f"{Fore.WHITE + Style.BRIGHT} Ditangani oleh Anti-Captcha {Style.RESET_ALL}" # Mengubah pesan
+            f"{Fore.WHITE + Style.BRIGHT} Ditangani oleh Anti-Captcha {Style.RESET_ALL}"
         )
 
         self.log(f"{Fore.CYAN + Style.BRIGHT}Captcha:{Style.RESET_ALL}")
 
-        cf_solved = await self.solve_cf_turnstile(email) # Parameter proxy dihapus
+        cf_solved = await self.solve_cf_turnstile(email)
         if not cf_solved:
             self.log(
                 f"{Fore.MAGENTA + Style.BRIGHT}    >{Style.RESET_ALL}"
@@ -224,7 +202,7 @@ class DDAI:
             f"{Fore.GREEN + Style.BRIGHT}Terpecahkan{Style.RESET_ALL}"
         )
         
-        login = await self.auth_login(email) # Parameter proxy dihapus
+        login = await self.auth_login(email)
         if login and login.get("status") == "success":
             access_token = login["data"]["accessToken"]
             refresh_token = login["data"]["refreshToken"]
@@ -243,18 +221,11 @@ class DDAI:
                 self.log(f"{Fore.RED + Style.BRIGHT}Tidak Ada Akun yang Dimuat.{Style.RESET_ALL}")
                 return
             
-            # Memuat kunci Anti-Captcha
             if not self.ANTICAPTCHA_API_KEY:
                 self.log(f"{Fore.RED + Style.BRIGHT}Kunci API Anti-Captcha tidak tersedia. Harap periksa file 'anticaptcha_key.txt'.{Style.RESET_ALL}")
                 return
 
-            use_proxy_choice = self.print_question() # Ini sekarang hanya akan menanyakan '1'
-
-            # Variabel `use_proxy` tidak lagi digunakan secara fungsional untuk logika proxy,
-            # tetapi kita menyimpannya di sini untuk menyederhanakan penghapusan parameter dalam fungsi lain.
-            # use_proxy = False 
-            # if use_proxy_choice == 1: # Karena hanya ada satu pilihan sekarang
-            #     use_proxy = True
+            use_proxy_choice = self.print_question()
 
             self.clear_terminal()
             self.welcome()
@@ -262,10 +233,6 @@ class DDAI:
                 f"{Fore.GREEN + Style.BRIGHT}Total Akun: {Style.RESET_ALL}"
                 f"{Fore.WHITE + Style.BRIGHT}{len(accounts)}{Style.RESET_ALL}"
             )
-
-            # Penghapusan pemuatan proxy manual
-            # if use_proxy:
-            #     await self.load_proxies(use_proxy_choice)
 
             separator = "="*25
             for idx, account in enumerate(accounts, start=1):
@@ -280,10 +247,11 @@ class DDAI:
                         f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
                     )
 
-                    if not "@" in email or not password:
+                    # Perbaikan di sini: Tambahkan pemeriksaan email dan password yang lebih ketat sebelum diproses
+                    if not email or not "@" in email or not password:
                         self.log(
                             f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
-                            f"{Fore.RED+Style.BRIGHT} Data Akun Tidak Valid {Style.RESET_ALL}"
+                            f"{Fore.RED+Style.BRIGHT} Data Akun ({self.mask_account(email)}) Tidak Valid (Email atau Password kosong/salah format){Style.RESET_ALL}"
                         )
                         continue
 
@@ -294,7 +262,7 @@ class DDAI:
 
                     self.password[email] = password
 
-                    await self.process_accounts(email) # Parameter use_proxy dihapus
+                    await self.process_accounts(email)
                     await asyncio.sleep(3)
 
             self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*68)
