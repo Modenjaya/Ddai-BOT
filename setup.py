@@ -263,7 +263,8 @@ class DDAI:
                     self.password[email] = password
 
                     await self.process_accounts(email)
-                    await asyncio.sleep(3)
+                    self.log(f"{Fore.YELLOW}Menunggu 60 detik sebelum memproses akun berikutnya...{Style.RESET_ALL}")
+                    await asyncio.sleep(30)
 
             self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*68)
 
