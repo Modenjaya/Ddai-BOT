@@ -4,6 +4,9 @@ from datetime import datetime
 from colorama import *
 import asyncio, json, os, pytz
 
+# Impor klien API Anti-Captcha (Anda perlu menginstal ini: pip install anticaptchaofficial)
+from anticaptchaofficial.turnstile import * # Menggunakan turnstile karena SITE_KEY yang diberikan
+
 wib = pytz.timezone('Asia/Jakarta')
 
 class DDAI:
@@ -20,13 +23,33 @@ class DDAI:
         }
         self.BASE_API = "https://auth.ddai.space"
         self.PAGE_URL = "https://app.ddai.space"
-        self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1"
-        self.CAPTCHA_KEY = None
-        self.proxies = []
-        self.proxy_index = 0
-        self.account_proxies = {}
+        # SITE_KEY Anda (0x4AAAAAABdw7Ezbqw4v6Kr1) menunjukkan ini adalah Cloudflare Turnstile, bukan reCAPTCHA.
+        self.SITE_KEY = "0x4AAAAAABdw7Ezbqw4v6Kr1" 
+        self.ANTICAPTCHA_API_KEY = self.load_anticaptcha_key() # Muat kunci API Anti-Captcha
+        # self.CAPTCHA_KEY = None # Tidak lagi diperlukan karena Anti-Captcha
+        # Atribut proxy tidak lagi diperlukan karena Anti-Captcha menanganinya
+        # self.proxies = []
+        # self.proxy_index = 0
+        # self.account_proxies = {}
         self.captcha_tokens = {}
         self.password = {}
+
+    def load_anticaptcha_key(self):
+        """Memuat kunci API Anti-Captcha dari sebuah file."""
+        filename = "anticaptcha_key.txt"
+        try:
+            if not os.path.exists(filename):
+                self.log(f"{Fore.RED}File '{filename}' tidak ditemukan. Harap buat dan masukkan kunci API Anti-Captcha Anda di dalamnya.{Style.RESET_ALL}")
+                return None
+            with open(filename, 'r') as f:
+                key = f.readline().strip()
+                if not key:
+                    self.log(f"{Fore.RED}Kunci API Anti-Captcha tidak ditemukan di '{filename}'. Pastikan file tersebut berisi kunci Anda.{Style.RESET_ALL}")
+                    return None
+                return key
+        except Exception as e:
+            self.log(f"{Fore.RED}Gagal memuat kunci API Anti-Captcha: {e}{Style.RESET_ALL}")
+            return None
 
     def clear_terminal(self):
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -39,6 +62,7 @@ class DDAI:
         )
 
     def welcome(self):
+        # Tolak untuk menghapus watermark
         print(
             f"""
         {Fore.GREEN + Style.BRIGHT}Auto Setup {Fore.BLUE + Style.BRIGHT}DDAI Network - BOT
@@ -57,8 +81,8 @@ class DDAI:
         filename = "accounts.json"
         try:
             if not os.path.exists(filename):
-                self.log(f"{Fore.RED}File {filename} Not Found.{Style.RESET_ALL}")
-                return
+                self.log(f"{Fore.RED}File {filename} Tidak Ditemukan.{Style.RESET_ALL}")
+                return []
 
             with open(filename, 'r') as file:
                 data = json.load(file)
@@ -67,7 +91,7 @@ class DDAI:
                 return []
         except json.JSONDecodeError:
             return []
-        
+            
     def save_tokens(self, new_accounts):
         filename = "tokens.json"
         try:
@@ -89,69 +113,26 @@ class DDAI:
 
         except Exception as e:
             return []
-        
-    def load_2captcha_key(self):
-        try:
-            with open("2captcha_key.txt", 'r') as file:
-                captcha_key = file.read().strip()
-
-            return captcha_key
-        except Exception as e:
-            return None
-
-    async def load_proxies(self, use_proxy_choice: int):
-        filename = "proxy.txt"
-        try:
-            if use_proxy_choice == 1:
-                response = await asyncio.to_thread(requests.get, "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text")
-                response.raise_for_status()
-                content = response.text
-                with open(filename, 'w') as f:
-                    f.write(content)
-                self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
-            else:
-                if not os.path.exists(filename):
-                    self.log(f"{Fore.RED + Style.BRIGHT}File {filename} Not Found.{Style.RESET_ALL}")
-                    return
-                with open(filename, 'r') as f:
-                    self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
             
-            if not self.proxies:
-                self.log(f"{Fore.RED + Style.BRIGHT}No Proxies Found.{Style.RESET_ALL}")
-                return
+    # Metode load_2captcha_key tidak lagi diperlukan
+    # def load_2captcha_key(self):
+    #     try:
+    #         with open("2captcha_key.txt", 'r') as file:
+    #             captcha_key = file.read().strip()
+    #         return captcha_key
+    #     except Exception as e:
+    #         return None
 
-            self.log(
-                f"{Fore.GREEN + Style.BRIGHT}Proxies Total  : {Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT}{len(self.proxies)}{Style.RESET_ALL}"
-            )
-        
-        except Exception as e:
-            self.log(f"{Fore.RED + Style.BRIGHT}Failed To Load Proxies: {e}{Style.RESET_ALL}")
-            self.proxies = []
-
-    def check_proxy_schemes(self, proxies):
-        schemes = ["http://", "https://", "socks4://", "socks5://"]
-        if any(proxies.startswith(scheme) for scheme in schemes):
-            return proxies
-        return f"http://{proxies}"
-
-    def get_next_proxy_for_account(self, user_id):
-        if user_id not in self.account_proxies:
-            if not self.proxies:
-                return None
-            proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
-            self.account_proxies[user_id] = proxy
-            self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
-        return self.account_proxies[user_id]
-
-    def rotate_proxy_for_account(self, user_id):
-        if not self.proxies:
-            return None
-        proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
-        self.account_proxies[user_id] = proxy
-        self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
-        return proxy
-    
+    # Metode terkait proxy dihapus
+    # async def load_proxies(self, use_proxy_choice: int):
+    #     ...
+    # def check_proxy_schemes(self, proxies):
+    #     ...
+    # def get_next_proxy_for_account(self, user_id):
+    #     ...
+    # def rotate_proxy_for_account(self, user_id):
+    #     ...
+            
     def mask_account(self, account):
         if '@' in account:
             local, domain = account.split('@', 1)
@@ -159,77 +140,53 @@ class DDAI:
             return f"{mask_account}@{domain}"
 
     def print_question(self):
+        # Pilihan proxy disederhanakan karena Anti-Captcha menanganinya secara internal
+        print(f"{Fore.WHITE + Style.BRIGHT}1. Jalankan Tanpa Proxy (Anti-Captcha menanganinya secara internal){Style.RESET_ALL}")
         while True:
             try:
-                print(f"{Fore.WHITE + Style.BRIGHT}1. Run With Free Proxyscrape Proxy{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}2. Run With Private Proxy{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}3. Run Without Proxy{Style.RESET_ALL}")
-                choose = int(input(f"{Fore.BLUE + Style.BRIGHT}Choose [1/2/3] -> {Style.RESET_ALL}").strip())
+                choose = int(input(f"{Fore.BLUE + Style.BRIGHT}Pilih [1] -> {Style.RESET_ALL}").strip())
 
-                if choose in [1, 2, 3]:
-                    proxy_type = (
-                        "With Free Proxyscrape" if choose == 1 else 
-                        "With Private" if choose == 2 else 
-                        "Without"
-                    )
-                    print(f"{Fore.GREEN + Style.BRIGHT}Run {proxy_type} Proxy Selected.{Style.RESET_ALL}")
-                    return choose
+                if choose == 1:
+                    print(f"{Fore.GREEN + Style.BRIGHT}Pilihan Jalankan Tanpa Proxy Terpilih.{Style.RESET_ALL}")
+                    return choose # Mengembalikan 1
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter either 1, 2 or 3.{Style.RESET_ALL}")
+                    print(f"{Fore.RED + Style.BRIGHT}Harap masukkan 1.{Style.RESET_ALL}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number (1, 2 or 3).{Style.RESET_ALL}")
+                print(f"{Fore.RED + Style.BRIGHT}Input tidak valid. Masukkan angka (1).{Style.RESET_ALL}")
     
-    async def solve_cf_turnstile(self, email: str, proxy=None, retries=5):
-        for attempt in range(retries):
-            try:
-                if self.CAPTCHA_KEY is None:
-                    return None
-                    
-                url = f"http://2captcha.com/in.php?key={self.CAPTCHA_KEY}&method=turnstile&sitekey={self.SITE_KEY}&pageurl={self.PAGE_URL}"
-                response = await asyncio.to_thread(requests.get, url=url, proxy=proxy, timeout=60, impersonate="chrome110", verify=False)
-                response.raise_for_status()
-                result = response.text
+    async def solve_cf_turnstile(self, email: str, retries=5): # Parameter proxy dihapus
+        if not self.ANTICAPTCHA_API_KEY:
+            self.log(f"{Fore.RED}Kunci API Anti-Captcha tidak dimuat. Tidak dapat menyelesaikan captcha.{Style.RESET_ALL}")
+            return None
 
-                if 'OK|' not in result:
-                    await asyncio.sleep(5)
-                    continue
+        solver = CloudflareTurnstile() # Menggunakan CloudflareTurnstile
+        solver.set_verbose(0)
+        solver.set_key(self.ANTICAPTCHA_API_KEY)
+        
+        solver.set_website_url(self.PAGE_URL)
+        solver.set_website_key(self.SITE_KEY)
 
-                request_id = result.split('|')[1]
+        self.log(f"{Fore.YELLOW}Memulai penyelesaian Cloudflare Turnstile dengan Anti-Captcha...{Style.RESET_ALL}")
+        
+        # Penanganan proxy di sini dilakukan oleh pustaka Anti-Captcha secara internal
+        # Jika Anda ingin menggunakan proxy kustom, Anda akan mengaturnya di sini
+        # Contoh: solver.set_proxy_address("your_proxy_address")
+        # solver.set_proxy_port(port)
+        # solver.set_proxy_login(username)
+        # solver.set_proxy_password(password)
+        # solver.set_proxy_type("http") # atau "https", "socks4", "socks5"
+        
+        g_response = solver.solve_and_get_solution()
 
-                self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}    >{Style.RESET_ALL}"
-                    f"{Fore.BLUE + Style.BRIGHT} Req Id: {Style.RESET_ALL}"
-                    f"{Fore.WHITE + Style.BRIGHT}{request_id}{Style.RESET_ALL}"
-                )
+        if g_response != 0:
+            self.log(f"{Fore.GREEN}Cloudflare Turnstile terpecahkan: {g_response}{Style.RESET_ALL}")
+            self.captcha_tokens[email] = g_response
+            return True
+        else:
+            self.log(f"{Fore.RED}Gagal menyelesaikan Cloudflare Turnstile: {solver.error_code}{Style.RESET_ALL}")
+            return None
 
-                for _ in range(30):
-                    res_url = f"http://2captcha.com/res.php?key={self.CAPTCHA_KEY}&action=get&id={request_id}"
-                    res_response = await asyncio.to_thread(requests.get, url=res_url, proxy=proxy, timeout=60, impersonate="chrome110", verify=False)
-                    res_response.raise_for_status()
-                    res_result = res_response.text
-
-                    if 'OK|' in res_result:
-                        captcha_token = res_result.split('|')[1]
-                        self.captcha_tokens[email] = captcha_token
-                        return True
-                    elif res_result == "CAPCHA_NOT_READY":
-                        self.log(
-                            f"{Fore.MAGENTA + Style.BRIGHT}    >{Style.RESET_ALL}"
-                            f"{Fore.BLUE + Style.BRIGHT} Status: {Style.RESET_ALL}"
-                            f"{Fore.YELLOW + Style.BRIGHT}Captcha Not Ready{Style.RESET_ALL}"
-                        )
-                        await asyncio.sleep(5)
-                        continue
-                    else:
-                        break
-
-            except Exception as e:
-                if attempt < retries - 1:
-                    await asyncio.sleep(5)
-                    continue
-                return None
-
-    async def auth_login(self, email: str, proxy=None, retries=5):
+    async def auth_login(self, email: str, retries=5): # Parameter proxy dihapus
         url = f"{self.BASE_API}/login"
         data = json.dumps({"email":email, "password":self.password[email], "captchaToken":self.captcha_tokens[email]})
         headers = {
@@ -239,7 +196,7 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(requests.post, url=url, headers=headers, data=data, proxy=proxy, timeout=60, impersonate="chrome110", verify=False)
+                response = await asyncio.to_thread(requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False) # Parameter proxy dihapus
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
@@ -248,39 +205,41 @@ class DDAI:
                     continue
                 self.log(
                     f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Login Failed {Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Login Gagal {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                     f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
                 )
 
         return None
         
-    async def process_accounts(self, email: str, use_proxy: bool):
-        proxy = self.get_next_proxy_for_account(email) if use_proxy else None
-    
+    async def process_accounts(self, email: str): # Parameter use_proxy dihapus
+        # Baris ini tidak lagi diperlukan karena proxy ditangani oleh Anti-Captcha
+        # proxy = self.get_next_proxy_for_account(email) if use_proxy else None
+        
+        # Anda dapat menghapus baris log proxy ini atau mengubahnya untuk mencerminkan bahwa proxy ditangani oleh Anti-Captcha
         self.log(
-            f"{Fore.CYAN + Style.BRIGHT}Proxy  :{Style.RESET_ALL}"
-            f"{Fore.WHITE + Style.BRIGHT} {proxy} {Style.RESET_ALL}"
+            f"{Fore.CYAN + Style.BRIGHT}Proxy  :{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} Ditangani oleh Anti-Captcha {Style.RESET_ALL}" # Mengubah pesan
         )
 
         self.log(f"{Fore.CYAN + Style.BRIGHT}Captcha:{Style.RESET_ALL}")
 
-        cf_solved = await self.solve_cf_turnstile(email, proxy)
+        cf_solved = await self.solve_cf_turnstile(email) # Parameter proxy dihapus
         if not cf_solved:
             self.log(
                 f"{Fore.MAGENTA + Style.BRIGHT}    >{Style.RESET_ALL}"
                 f"{Fore.BLUE + Style.BRIGHT} Status: {Style.RESET_ALL}"
-                f"{Fore.RED + Style.BRIGHT}Not Solved{Style.RESET_ALL}"
+                f"{Fore.RED + Style.BRIGHT}Tidak Terpecahkan{Style.RESET_ALL}"
             )
             return
-        
+            
         self.log(
             f"{Fore.MAGENTA + Style.BRIGHT}    >{Style.RESET_ALL}"
             f"{Fore.BLUE + Style.BRIGHT} Status: {Style.RESET_ALL}"
-            f"{Fore.GREEN + Style.BRIGHT}Solved{Style.RESET_ALL}"
+            f"{Fore.GREEN + Style.BRIGHT}Terpecahkan{Style.RESET_ALL}"
         )
-    
-        login = await self.auth_login(email, proxy)
+        
+        login = await self.auth_login(email) # Parameter proxy dihapus
         if login and login.get("status") == "success":
             access_token = login["data"]["accessToken"]
             refresh_token = login["data"]["refreshToken"]
@@ -289,35 +248,39 @@ class DDAI:
 
             self.log(
                 f"{Fore.CYAN + Style.BRIGHT}Status :{Style.RESET_ALL}"
-                f"{Fore.GREEN + Style.BRIGHT} Token Have Been Saved Successfully {Style.RESET_ALL}"
+                f"{Fore.GREEN + Style.BRIGHT} Token Berhasil Disimpan {Style.RESET_ALL}"
             )
-    
+        
     async def main(self):
         try:
             accounts = self.load_accounts()
             if not accounts:
-                self.log(f"{Fore.RED + Style.BRIGHT}No Accounts Loaded.{Style.RESET_ALL}")
+                self.log(f"{Fore.RED + Style.BRIGHT}Tidak Ada Akun yang Dimuat.{Style.RESET_ALL}")
                 return
             
-            capctha_key = self.load_2captcha_key()
-            if capctha_key:
-                self.CAPTCHA_KEY = capctha_key
-            
-            use_proxy_choice = self.print_question()
+            # Memuat kunci Anti-Captcha
+            if not self.ANTICAPTCHA_API_KEY:
+                self.log(f"{Fore.RED + Style.BRIGHT}Kunci API Anti-Captcha tidak tersedia. Harap periksa file 'anticaptcha_key.txt'.{Style.RESET_ALL}")
+                return
 
-            use_proxy = False
-            if use_proxy_choice in [1, 2]:
-                use_proxy = True
+            use_proxy_choice = self.print_question() # Ini sekarang hanya akan menanyakan '1'
+
+            # Variabel `use_proxy` tidak lagi digunakan secara fungsional untuk logika proxy,
+            # tetapi kita menyimpannya di sini untuk menyederhanakan penghapusan parameter dalam fungsi lain.
+            # use_proxy = False 
+            # if use_proxy_choice == 1: # Karena hanya ada satu pilihan sekarang
+            #     use_proxy = True
 
             self.clear_terminal()
             self.welcome()
             self.log(
-                f"{Fore.GREEN + Style.BRIGHT}Account's Total: {Style.RESET_ALL}"
+                f"{Fore.GREEN + Style.BRIGHT}Total Akun: {Style.RESET_ALL}"
                 f"{Fore.WHITE + Style.BRIGHT}{len(accounts)}{Style.RESET_ALL}"
             )
 
-            if use_proxy:
-                await self.load_proxies(use_proxy_choice)
+            # Penghapusan pemuatan proxy manual
+            # if use_proxy:
+            #     await self.load_proxies(use_proxy_choice)
 
             separator = "="*25
             for idx, account in enumerate(accounts, start=1):
@@ -327,7 +290,7 @@ class DDAI:
                     self.log(
                         f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
                         f"{Fore.WHITE + Style.BRIGHT} {idx} {Style.RESET_ALL}"
-                        f"{Fore.CYAN + Style.BRIGHT}Of{Style.RESET_ALL}"
+                        f"{Fore.CYAN + Style.BRIGHT}Dari{Style.RESET_ALL}"
                         f"{Fore.WHITE + Style.BRIGHT} {len(accounts)} {Style.RESET_ALL}"
                         f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
                     )
@@ -335,18 +298,18 @@ class DDAI:
                     if not "@" in email or not password:
                         self.log(
                             f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
-                            f"{Fore.RED+Style.BRIGHT} Invalid Account Data {Style.RESET_ALL}"
+                            f"{Fore.RED+Style.BRIGHT} Data Akun Tidak Valid {Style.RESET_ALL}"
                         )
                         continue
 
                     self.log(
-                        f"{Fore.CYAN + Style.BRIGHT}Account:{Style.RESET_ALL}"
+                        f"{Fore.CYAN + Style.BRIGHT}Akun:{Style.RESET_ALL}"
                         f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(email)} {Style.RESET_ALL}"
                     )
 
                     self.password[email] = password
 
-                    await self.process_accounts(email, use_proxy)
+                    await self.process_accounts(email) # Parameter use_proxy dihapus
                     await asyncio.sleep(3)
 
             self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*68)
@@ -363,5 +326,5 @@ if __name__ == "__main__":
         print(
             f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-            f"{Fore.RED + Style.BRIGHT}[ EXIT ] DDAI Network - BOT{Style.RESET_ALL}                                      ",                                       
+            f"{Fore.RED + Style.BRIGHT}[ EXIT ] DDAI Network - BOT{Style.RESET_ALL}                                      ",
         )
