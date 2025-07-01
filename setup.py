@@ -3,6 +3,7 @@ from fake_useragent import FakeUserAgent
 from datetime import datetime
 from colorama import *
 import asyncio, json, os, pytz
+import random # Tambahkan impor modul random
 
 # Impor klien API Anti-Captcha untuk Cloudflare Turnstile
 from anticaptchaofficial.turnstileproxyless import *
@@ -143,7 +144,7 @@ class DDAI:
 
         self.log(f"{Fore.YELLOW}Memulai penyelesaian Cloudflare Turnstile dengan Anti-Captcha...{Style.RESET_ALL}")
         
-        g_response = solver.solve_and_return_solution() # Perbaikan di sini: solve_and_return_solution()
+        g_response = solver.solve_and_return_solution()
 
         if g_response != 0:
             self.log(f"{Fore.GREEN}Cloudflare Turnstile terpecahkan: {g_response}{Style.RESET_ALL}")
@@ -163,20 +164,34 @@ class DDAI:
         }
         for attempt in range(retries):
             try:
-                response = await asyncio.to_thread(cffi_requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False) # Perbaikan di sini: cffi_requests
+                response = await asyncio.to_thread(cffi_requests.post, url=url, headers=headers, data=data, timeout=60, impersonate="chrome110", verify=False)
                 response.raise_for_status()
                 return response.json()
-            except Exception as e:
-                if attempt < retries - 1:
-                    await asyncio.(5)
+            except cffi_requests.HTTPError as e: # Tangkap HTTPError secara spesifik untuk menangani 429
+                if e.response.status_code == 429:
+                    retry_after = int(e.response.headers.get('Retry-After', 60)) # Dapatkan waktu tunggu dari header, default 60 detik
+                    self.log(
+                        f"{Fore.RED+Style.BRIGHT}Status :{Style.RESET_ALL}"
+                        f"{Fore.RED+Style.BRIGHT} Login Gagal - HTTP Error 429: Terlalu Banyak Permintaan. Menunggu {retry_after} detik.{Style.RESET_ALL}"
+                    )
+                    await asyncio.sleep(retry_after + 5) # Tambahkan sedikit buffer, lalu coba lagi akun yang sama
                     continue
+                else:
+                    self.log(
+                        f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
+                        f"{Fore.RED+Style.BRIGHT} Login Gagal - HTTP Error {e.response.status_code}: {e}{Style.RESET_ALL}"
+                    )
+            except Exception as e:
                 self.log(
                     f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Login Gagal {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Login Gagal: {Style.RESET_ALL}"
                     f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
                 )
-
+            
+            if attempt < retries - 1:
+                await asyncio.sleep(5)
+                continue
+            
         return None
         
     async def process_accounts(self, email: str):
@@ -247,7 +262,6 @@ class DDAI:
                         f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
                     )
 
-                    # Perbaikan di sini: Tambahkan pemeriksaan email dan password yang lebih ketat sebelum diproses
                     if not email or not "@" in email or not password:
                         self.log(
                             f"{Fore.CYAN+Style.BRIGHT}Status :{Style.RESET_ALL}"
@@ -263,8 +277,11 @@ class DDAI:
                     self.password[email] = password
 
                     await self.process_accounts(email)
-                    self.log(f"{Fore.YELLOW}Menunggu 60 detik sebelum memproses akun berikutnya...{Style.RESET_ALL}")
-                    await asyncio.sleep(60)
+                    
+                    # Tambahkan jeda waktu acak di sini
+                    random_delay = random.randint(60, 120) # Jeda acak antara 60 hingga 120 detik
+                    self.log(f"{Fore.YELLOW}Menunggu {random_delay} detik sebelum memproses akun berikutnya...{Style.RESET_ALL}")
+                    await asyncio.sleep(random_delay)
 
             self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*68)
 
